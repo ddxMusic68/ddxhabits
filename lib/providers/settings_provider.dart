@@ -2,15 +2,17 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
+import '../services/sync_service.dart';
 
 enum AppThemeMode { light, dark, system }
 
 class SettingsProvider extends ChangeNotifier {
+  final SyncService _syncService = SyncService();
   AppThemeMode _themeMode = AppThemeMode.system;
-  bool _dropboxSyncEnabled = false;
+  bool _isDropboxAuthenticated = false;
 
   AppThemeMode get themeMode => _themeMode;
-  bool get dropboxSyncEnabled => _dropboxSyncEnabled;
+  bool get isDropboxAuthenticated => _isDropboxAuthenticated;
 
   void setThemeMode(AppThemeMode mode) {
     _themeMode = mode;
@@ -18,9 +20,14 @@ class SettingsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void toggleDropboxSync() {
-    _dropboxSyncEnabled = !_dropboxSyncEnabled;
-    _saveSettings();
+  Future<void> refreshDropboxStatus() async {
+    _isDropboxAuthenticated = await _syncService.isAuthenticated;
+    notifyListeners();
+  }
+
+  Future<void> disconnectDropbox() async {
+    await _syncService.logout();
+    _isDropboxAuthenticated = false;
     notifyListeners();
   }
 
@@ -34,11 +41,11 @@ class SettingsProvider extends ChangeNotifier {
         (e) => e.name == json['themeMode'],
         orElse: () => AppThemeMode.system,
       );
-      _dropboxSyncEnabled = json['dropboxSyncEnabled'] as bool? ?? false;
       notifyListeners();
     } catch (e) {
       // Use defaults
     }
+    await refreshDropboxStatus();
   }
 
   Future<File> get _file async {
@@ -50,7 +57,6 @@ class SettingsProvider extends ChangeNotifier {
     final file = await _file;
     final json = {
       'themeMode': _themeMode.name,
-      'dropboxSyncEnabled': _dropboxSyncEnabled,
     };
     await file.writeAsString(jsonEncode(json));
   }

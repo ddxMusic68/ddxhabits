@@ -6,13 +6,12 @@ import 'package:dio/dio.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path/path.dart' as p;
-import '../utils/path_helper.dart';
 
 class SyncService {
   static const String _accessTokenKey = 'dropbox_access_token';
   static const String _refreshTokenKey = 'dropbox_refresh_token';
   static const String _appKeyKey = 'dropbox_app_key';
-  static const String _remoteBasePath = '';
+  static const String _remoteBasePath = '/JournalApp';
 
   final Dio _dio = Dio();
   String? _currentCodeVerifier;
@@ -253,11 +252,12 @@ class SyncService {
   }
 
   Future<void> deleteAllRemote() async {
-    for (final fileName in _syncFiles) {
-      try {
-        await deleteFile('/$fileName');
-      } catch (_) {}
-    }
+    final token = await _requireToken();
+    await _dio.post(
+      'https://api.dropboxapi.com/2/files/delete_v2',
+      data: {'path': _remoteBasePath},
+      options: _authOptions(token),
+    );
   }
 
   Future<void> createFolder(String remotePath) async {
@@ -347,40 +347,7 @@ class SyncService {
     return DateTime.now().isAfter(expiry);
   }
 
-  // --- ddxHabits Sync ---
-
-  static const _syncFiles = [
-    'habit_grids.json',
-    'goal_chains.json',
-    'money_jars.json',
-    'habit_journals.json',
-  ];
-
-  Future<String> _getLocalPath(String fileName) async {
-    final directory = await getStoragePath();
-    return '$directory/$fileName';
-  }
-
-  Future<void> syncFile(String localFileName) async {
-    try {
-      final appKey = await getAppKey();
-      if (appKey == null) return;
-
-      if (await _isTokenExpired()) {
-        await _refreshAccessToken(appKey);
-      }
-
-      final localPath = await _getLocalPath(localFileName);
-      final file = File(localPath);
-      if (await file.exists()) {
-        await uploadFile(localPath, '/$localFileName');
-      }
-    } catch (_) {
-      // Non-blocking — don't let sync failures break the app
-    }
-  }
-
-  Future<void> fullSync() async {
+  Future<void> fullSync(String localDataPath, String localMediaDir) async {
     final appKey = await getAppKey();
     if (appKey == null) return;
 
@@ -388,76 +355,155 @@ class SyncService {
       await _refreshAccessToken(appKey);
     }
 
-    for (final fileName in _syncFiles) {
-      final localPath = await _getLocalPath(fileName);
-      final localFile = File(localPath);
+    // Download remote data
+    final remoteData = await _downloadRemoteJson();
 
-      // Try to download remote version
+    // Load local data
+    final localFile = File(localDataPath);
+    Map<String, dynamic>? localData;
+    if (await localFile.exists()) {
+      localData = jsonDecode(await localFile.readAsString());
+    }
+
+    // Merge
+    final merged = _mergeData(localData, remoteData);
+
+    // Save merged locally
+    await localFile.writeAsString(jsonEncode(merged));
+
+    // Upload merged
+    try {
+      await uploadFile(localDataPath, '/journal_data.json');
+    } catch (_) {
       try {
-        final bytes = await downloadFile('/$fileName');
-        final remoteJson = utf8.decode(bytes);
+        await createFolder('');
+      } catch (_) {}
+      await uploadFile(localDataPath, '/journal_data.json');
+    }
 
-        if (await localFile.exists()) {
-          final localJson = await localFile.readAsString();
-          if (localJson != remoteJson) {
-            // Simple merge: keep both, remote wins on conflicts
-            final localData = jsonDecode(localJson);
-            final remoteData = jsonDecode(remoteJson);
-            final merged = _mergeLists(localData, remoteData);
-            await localFile.writeAsString(jsonEncode(merged));
-          }
-        } else {
-          await localFile.writeAsString(remoteJson);
-        }
-      } catch (_) {
-        // Remote file might not exist yet
-      }
+    // Sync media
+    await _syncMedia(localDataPath, localMediaDir);
+  }
 
-      // Upload local version
-      try {
-        if (await localFile.exists()) {
-          await uploadFile(localPath, '/$fileName');
-        }
-      } catch (_) {
-        try {
-          await createFolder('');
-        } catch (_) {}
-        try {
-          if (await localFile.exists()) {
-            await uploadFile(localPath, '/$fileName');
-          }
-        } catch (_) {}
-      }
+  Future<Map<String, dynamic>?> _downloadRemoteJson() async {
+    try {
+      final bytes = await downloadFile('/journal_data.json');
+      final json = utf8.decode(bytes);
+      return jsonDecode(json) as Map<String, dynamic>;
+    } catch (_) {
+      return null;
     }
   }
 
-  dynamic _mergeLists(dynamic local, dynamic remote) {
-    if (local == null) return remote;
-    if (remote == null) return local;
-    if (local is List && remote is List) {
-      final localMap = <String, dynamic>{};
-      for (final item in local) {
-        if (item is Map<String, dynamic> && item.containsKey('name')) {
-          localMap[item['name'] as String] = item;
-        }
-      }
-      for (final item in remote) {
-        if (item is Map<String, dynamic> && item.containsKey('name')) {
-          final name = item['name'] as String;
-          final existing = localMap[name];
-          if (existing == null) {
-            localMap[name] = item;
-          } else {
-            final localUpdated = DateTime.parse(existing['updatedAt'] as String);
-            final remoteUpdated = DateTime.parse(item['updatedAt'] as String);
-            if (remoteUpdated.isAfter(localUpdated)) {
-              localMap[name] = item;
-            }
-          }
-        }
-      }
-      return localMap.values.toList();
+  Map<String, dynamic> _mergeData(
+    Map<String, dynamic>? local,
+    Map<String, dynamic>? remote,
+  ) {
+    if (local == null && remote == null) {
+      return {
+        'nextEntryId': 1,
+        'nextTagId': 1,
+        'entries': <dynamic>[],
+        'tags': <dynamic>[],
+      };
     }
-    return local;
+    if (local == null) return remote!;
+    if (remote == null) return local;
+
+    final localEntries = (local['entries'] as List?) ?? [];
+    final remoteEntries = (remote['entries'] as List?) ?? [];
+
+    // Merge entries: combine, dedup by id, keep newer updatedAt
+    final entryMap = <int, Map<String, dynamic>>{};
+    for (final e in localEntries) {
+      final id = e['id'] as int;
+      entryMap[id] = e;
+    }
+    for (final e in remoteEntries) {
+      final id = e['id'] as int;
+      final existing = entryMap[id];
+      if (existing == null) {
+        entryMap[id] = e;
+      } else {
+        final localUpdated = DateTime.parse(existing['updated_at'] as String);
+        final remoteUpdated = DateTime.parse(e['updated_at'] as String);
+        if (remoteUpdated.isAfter(localUpdated)) {
+          entryMap[id] = e;
+        }
+      }
+    }
+
+    // Merge tags: combine, dedup by name
+    final localTags = (local['tags'] as List?) ?? [];
+    final remoteTags = (remote['tags'] as List?) ?? [];
+    final tagMap = <String, Map<String, dynamic>>{};
+    for (final t in localTags) {
+      tagMap[t['name'] as String] = t;
+    }
+    for (final t in remoteTags) {
+      if (!tagMap.containsKey(t['name'] as String)) {
+        tagMap[t['name'] as String] = t;
+      }
+    }
+
+    final nextEntryId = [
+      (local['nextEntryId'] as int?) ?? 1,
+      (remote['nextEntryId'] as int?) ?? 1,
+    ].reduce((a, b) => a > b ? a : b);
+
+    final nextTagId = [
+      (local['nextTagId'] as int?) ?? 1,
+      (remote['nextTagId'] as int?) ?? 1,
+    ].reduce((a, b) => a > b ? a : b);
+
+    return {
+      'nextEntryId': nextEntryId,
+      'nextTagId': nextTagId,
+      'entries': entryMap.values.toList(),
+      'tags': tagMap.values.toList(),
+    };
+  }
+
+  Future<void> _syncMedia(String localDataPath, String localMediaDir) async {
+    final data = jsonDecode(await File(localDataPath).readAsString());
+    final entries = (data['entries'] as List?) ?? [];
+
+    // Collect all local media paths referenced by entries
+    final mediaPaths = <String>{};
+    for (final e in entries) {
+      final paths = (e['media_paths'] as String?)?.split(',').where((s) => s.isNotEmpty) ?? [];
+      mediaPaths.addAll(paths);
+    }
+
+    // Upload local media files that exist
+    for (final path in mediaPaths) {
+      final file = File(path);
+      if (await file.exists()) {
+        final fileName = p.basename(path);
+        try {
+          await uploadFile(path, '/media/$fileName');
+        } catch (_) {
+          // Skip failed uploads
+        }
+      }
+    }
+
+    // Download remote media files that don't exist locally
+    try {
+      final remoteFiles = await listFiles('/media');
+      final localDir = Directory(localMediaDir);
+      if (!await localDir.exists()) {
+        await localDir.create(recursive: true);
+      }
+      for (final fileName in remoteFiles) {
+        final localFile = File(p.join(localMediaDir, fileName));
+        if (!await localFile.exists()) {
+          final bytes = await downloadFile('/media/$fileName');
+          await localFile.writeAsBytes(bytes);
+        }
+      }
+    } catch (_) {
+      // Remote media folder might not exist yet
+    }
   }
 }

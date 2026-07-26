@@ -1,10 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:path_provider/path_provider.dart';
 import '../models/habit_grid.dart';
 import '../models/goal_chain.dart';
 import '../models/money_jar.dart';
 import '../models/habit_journal.dart';
+import '../utils/path_helper.dart';
+import 'sync_service.dart';
 
 class DatabaseService {
   static const _gridsFileName = 'habit_grids.json';
@@ -12,15 +13,22 @@ class DatabaseService {
   static const _jarsFileName = 'money_jars.json';
   static const _journalsFileName = 'habit_journals.json';
 
+  final SyncService _syncService = SyncService();
+
   Future<File> _getFile(String fileName) async {
-    final directory = await getApplicationDocumentsDirectory();
-    return File('${directory.path}/$fileName');
+    final directory = await getStoragePath();
+    return File('$directory/$fileName');
+  }
+
+  void _syncInBackground(String fileName) {
+    _syncService.syncFile(fileName);
   }
 
   Future<void> saveHabitGrids(List<HabitGrid> grids) async {
     final file = await _getFile(_gridsFileName);
     final json = grids.map((g) => g.toJson()).toList();
     await file.writeAsString(jsonEncode(json));
+    _syncInBackground(_gridsFileName);
   }
 
   Future<List<HabitGrid>> loadHabitGrids() async {
@@ -39,6 +47,7 @@ class DatabaseService {
     final file = await _getFile(_chainsFileName);
     final json = chains.map((c) => c.toJson()).toList();
     await file.writeAsString(jsonEncode(json));
+    _syncInBackground(_chainsFileName);
   }
 
   Future<List<GoalChain>> loadGoalChains() async {
@@ -57,6 +66,7 @@ class DatabaseService {
     final file = await _getFile(_jarsFileName);
     final json = jars.map((j) => j.toJson()).toList();
     await file.writeAsString(jsonEncode(json));
+    _syncInBackground(_jarsFileName);
   }
 
   Future<List<MoneyJar>> loadMoneyJars() async {
@@ -75,6 +85,7 @@ class DatabaseService {
     final file = await _getFile(_journalsFileName);
     final json = journals.map((j) => j.toJson()).toList();
     await file.writeAsString(jsonEncode(json));
+    _syncInBackground(_journalsFileName);
   }
 
   Future<List<HabitJournal>> loadJournals() async {
