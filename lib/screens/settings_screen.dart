@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/habit_tracker_provider.dart';
@@ -98,6 +99,8 @@ class SettingsScreen extends StatelessWidget {
                   subtitle: const Text('Delete all data from Dropbox'),
                   onTap: () => _confirmClearCloud(context, settings),
                 ),
+              const Divider(),
+              const _VersionTile(),
             ],
           );
         },
@@ -312,6 +315,26 @@ class _ThemeTile extends StatelessWidget {
         ),
         Text(title),
       ],
+    );
+  }
+}
+
+class _VersionTile extends StatelessWidget {
+  const _VersionTile();
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<PackageInfo>(
+      future: PackageInfo.fromPlatform(),
+      builder: (context, snapshot) {
+        final version = snapshot.data?.version ?? '';
+        final buildNumber = snapshot.data?.buildNumber ?? '';
+        return ListTile(
+          leading: const Icon(Icons.info_outline),
+          title: const Text('Version'),
+          subtitle: Text('v$version+$buildNumber'),
+        );
+      },
     );
   }
 }
