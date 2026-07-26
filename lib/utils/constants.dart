@@ -6,7 +6,7 @@ class AppColors {
   static const mintLight = Color(0xFF016305);
   static const coral = Color(0xFFFF6B6B);
   static const coralDark = Color(0xFFCC3333);
-  static const coralLight = Color(0xFFFFD4D4);
+  static const coralLight = Color(0xFFF2D5D5);
   static const background = Color(0xFFF5FFF5);
   static const surface = Color(0xFFFFFFFF);
   static const textPrimary = Color(0xFF1A1A1A);

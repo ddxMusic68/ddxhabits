@@ -76,7 +76,7 @@ class _EntryScreenState extends State<EntryScreen> {
   Widget build(BuildContext context) {
     final timeFormat = DateFormat.Hms();
     final accentColor = widget.isGoodHabit ? AppColors.mintDark : AppColors.coralDark;
-    final bgColor = widget.isGoodHabit ? AppColors.mintLight : AppColors.coralLight;
+    final bgColor = widget.isGoodHabit ? AppColors.mintLight : const Color.fromARGB(255, 226, 108, 108);
 
     return Scaffold(
       appBar: AppBar(
@@ -150,12 +150,13 @@ class _EntryScreenState extends State<EntryScreen> {
             controller: _notesController,
             maxLines: null,
             minLines: 4,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               hintText: 'Write your thoughts...',
+              hintStyle: TextStyle(color: Colors.grey.shade500),
               border: InputBorder.none,
               isDense: true,
             ),
-            style: const TextStyle(fontSize: 15),
+            style: TextStyle(fontSize: 15, color: Theme.of(context).colorScheme.onSurface),
             onChanged: _saveNotes,
           ),
         ],
@@ -211,12 +212,13 @@ class _EntryScreenState extends State<EntryScreen> {
               controller: _getController(index, sub.text),
               maxLines: null,
               minLines: 2,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 hintText: 'Add a note...',
+                hintStyle: TextStyle(color: Colors.grey.shade500),
                 border: InputBorder.none,
                 isDense: true,
               ),
-              style: const TextStyle(fontSize: 15),
+              style: TextStyle(fontSize: 15, color: Theme.of(context).colorScheme.onSurface),
               onChanged: (text) => _updateText(index, text),
             ),
           ],
