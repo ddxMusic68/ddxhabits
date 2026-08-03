@@ -42,6 +42,11 @@ class _HomeScreenState extends State<HomeScreen> {
       drawer: AppDrawer(
         selected: _selected,
         onSelect: (item) => setState(() => _selected = item),
+        onDelete: (item) => setState(() {
+          if (_selected?.type == item.type && _selected?.index == item.index) {
+            _selected = null;
+          }
+        }),
       ),
       body: HomeBody(selected: _selected),
       floatingActionButton: FloatingActionButton(

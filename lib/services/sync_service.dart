@@ -354,6 +354,8 @@ class SyncService {
     'goal_chains.json',
     'money_jars.json',
     'habit_journals.json',
+    'habit_contracts.json',
+    'tombstones.json',
   ];
 
   Future<String> _getLocalPath(String fileName) async {
@@ -388,7 +390,12 @@ class SyncService {
       await _refreshAccessToken(appKey);
     }
 
+    // First sync tombstones so deletions are honored by data merges below.
+    final tombstones = await _syncTombstones();
+
     for (final fileName in _syncFiles) {
+      if (fileName == 'tombstones.json') continue;
+
       final localPath = await _getLocalPath(fileName);
       final localFile = File(localPath);
 
@@ -400,14 +407,17 @@ class SyncService {
         if (await localFile.exists()) {
           final localJson = await localFile.readAsString();
           if (localJson != remoteJson) {
-            // Simple merge: keep both, remote wins on conflicts
+            // Merge keeping both sides, then drop tombstoned items.
             final localData = jsonDecode(localJson);
             final remoteData = jsonDecode(remoteJson);
             final merged = _mergeLists(localData, remoteData);
-            await localFile.writeAsString(jsonEncode(merged));
+            final filtered = _removeTombstoned(merged, tombstones, fileName);
+            await localFile.writeAsString(jsonEncode(filtered));
           }
         } else {
-          await localFile.writeAsString(remoteJson);
+          final data = jsonDecode(remoteJson);
+          final filtered = _removeTombstoned(data, tombstones, fileName);
+          await localFile.writeAsString(jsonEncode(filtered));
         }
       } catch (_) {
         // Remote file might not exist yet
@@ -429,6 +439,101 @@ class SyncService {
         } catch (_) {}
       }
     }
+  }
+
+  /// Downloads remote tombstones, merges with local, saves merged, uploads.
+  /// Returns the merged tombstone list as raw maps keyed for filtering.
+  Future<List<Map<String, dynamic>>> _syncTombstones() async {
+    const fileName = 'tombstones.json';
+    final localPath = await _getLocalPath(fileName);
+    final localFile = File(localPath);
+
+    List<Map<String, dynamic>> localList = [];
+    if (await localFile.exists()) {
+      final localJson = await localFile.readAsString();
+      final decoded = jsonDecode(localJson);
+      if (decoded is List) {
+        localList = decoded.map((e) => e as Map<String, dynamic>).toList();
+      }
+    }
+
+    List<Map<String, dynamic>> remoteList = [];
+    try {
+      final bytes = await downloadFile('/$fileName');
+      final decoded = jsonDecode(utf8.decode(bytes));
+      if (decoded is List) {
+        remoteList = decoded.map((e) => e as Map<String, dynamic>).toList();
+      }
+    } catch (_) {
+      // Remote file might not exist yet
+    }
+
+    final merged = _mergeTombstones(localList, remoteList);
+    await localFile.writeAsString(jsonEncode(merged));
+
+    try {
+      await uploadFile(localPath, '/$fileName');
+    } catch (_) {
+      try {
+        await createFolder('');
+      } catch (_) {}
+      try {
+        await uploadFile(localPath, '/$fileName');
+      } catch (_) {}
+    }
+
+    return merged;
+  }
+
+  List<Map<String, dynamic>> _mergeTombstones(
+    List<Map<String, dynamic>> local,
+    List<Map<String, dynamic>> remote,
+  ) {
+    final map = <String, Map<String, dynamic>>{};
+    for (final t in [...local, ...remote]) {
+      final key = '${t['fileName']}|${t['name']}';
+      final existing = map[key];
+      if (existing == null) {
+        map[key] = t;
+      } else {
+        final existingTime = DateTime.parse(existing['deletedAt'] as String);
+        final newTime = DateTime.parse(t['deletedAt'] as String);
+        if (newTime.isAfter(existingTime)) {
+          map[key] = t;
+        }
+      }
+    }
+    return map.values.toList();
+  }
+
+  dynamic _removeTombstoned(
+    dynamic data,
+    List<Map<String, dynamic>> tombstones,
+    String fileName,
+  ) {
+    if (data is! List) return data;
+
+    final tombstoneTimes = <String, DateTime>{};
+    for (final t in tombstones) {
+      if (t['fileName'] == fileName && t['name'] is String) {
+        tombstoneTimes[t['name'] as String] =
+            DateTime.parse(t['deletedAt'] as String);
+      }
+    }
+    if (tombstoneTimes.isEmpty) return data;
+
+    return data.where((item) {
+      if (item is! Map<String, dynamic>) return true;
+      final name = item['name'];
+      if (name is! String) return true;
+      final deletedAt = tombstoneTimes[name];
+      if (deletedAt == null) return true;
+      final itemUpdated = item['updatedAt'] as String?;
+      if (itemUpdated == null) return false;
+      final updated = DateTime.parse(itemUpdated);
+      // Keep items updated after the deletion (re-created habit survives).
+      return updated.isAfter(deletedAt);
+    }).toList();
   }
 
   dynamic _mergeLists(dynamic local, dynamic remote) {

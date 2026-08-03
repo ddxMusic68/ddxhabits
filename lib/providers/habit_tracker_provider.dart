@@ -3,6 +3,7 @@ import '../models/habit_grid.dart';
 import '../models/goal_chain.dart';
 import '../models/money_jar.dart';
 import '../models/habit_journal.dart';
+import '../models/habit_contract.dart';
 import '../models/journal_entry.dart';
 import '../models/journal_sub_entry.dart';
 import '../services/database_service.dart';
@@ -13,17 +14,20 @@ class HabitTrackerProvider extends ChangeNotifier {
   List<GoalChain> _goalChains = [];
   List<MoneyJar> _moneyJars = [];
   List<HabitJournal> _journals = [];
+  List<HabitContract> _contracts = [];
 
   List<HabitGrid> get grids => _grids;
   List<GoalChain> get goalChains => _goalChains;
   List<MoneyJar> get moneyJars => _moneyJars;
   List<HabitJournal> get journals => _journals;
+  List<HabitContract> get contracts => _contracts;
 
   Future<void> loadAll() async {
     _grids = await _databaseService.loadHabitGrids();
     _goalChains = await _databaseService.loadGoalChains();
     _moneyJars = await _databaseService.loadMoneyJars();
     _journals = await _databaseService.loadJournals();
+    _contracts = await _databaseService.loadContracts();
     notifyListeners();
   }
 
@@ -53,8 +57,10 @@ class HabitTrackerProvider extends ChangeNotifier {
 
   Future<void> removeGrid(int index) async {
     if (index >= 0 && index < _grids.length) {
+      final removed = _grids[index].name;
       _grids.removeAt(index);
       await _databaseService.saveHabitGrids(_grids);
+      await _databaseService.recordDeletion(DatabaseService.gridsFileName, removed);
       notifyListeners();
     }
   }
@@ -85,8 +91,10 @@ class HabitTrackerProvider extends ChangeNotifier {
 
   Future<void> removeGoalChain(int index) async {
     if (index >= 0 && index < _goalChains.length) {
+      final removed = _goalChains[index].name;
       _goalChains.removeAt(index);
       await _databaseService.saveGoalChains(_goalChains);
+      await _databaseService.recordDeletion(DatabaseService.chainsFileName, removed);
       notifyListeners();
     }
   }
@@ -125,8 +133,10 @@ class HabitTrackerProvider extends ChangeNotifier {
 
   Future<void> removeMoneyJar(int index) async {
     if (index >= 0 && index < _moneyJars.length) {
+      final removed = _moneyJars[index].name;
       _moneyJars.removeAt(index);
       await _databaseService.saveMoneyJars(_moneyJars);
+      await _databaseService.recordDeletion(DatabaseService.jarsFileName, removed);
       notifyListeners();
     }
   }
@@ -165,8 +175,10 @@ class HabitTrackerProvider extends ChangeNotifier {
 
   Future<void> removeJournal(int index) async {
     if (index >= 0 && index < _journals.length) {
+      final removed = _journals[index].name;
       _journals.removeAt(index);
       await _databaseService.saveJournals(_journals);
+      await _databaseService.recordDeletion(DatabaseService.journalsFileName, removed);
       notifyListeners();
     }
   }
@@ -218,17 +230,59 @@ class HabitTrackerProvider extends ChangeNotifier {
     }
   }
 
+  // --- Habit Contract CRUD ---
+
+  Future<void> addContract(HabitContract contract) async {
+    _contracts.add(contract);
+    await _databaseService.saveContracts(_contracts);
+    notifyListeners();
+  }
+
+  Future<void> removeContract(int index) async {
+    if (index >= 0 && index < _contracts.length) {
+      final removed = _contracts[index].name;
+      _contracts.removeAt(index);
+      await _databaseService.saveContracts(_contracts);
+      await _databaseService.recordDeletion(DatabaseService.contractsFileName, removed);
+      notifyListeners();
+    }
+  }
+
   // --- All Data ---
 
   Future<void> clearAll() async {
+    final grids = _grids.map((g) => g.name).toList();
+    final chains = _goalChains.map((c) => c.name).toList();
+    final jars = _moneyJars.map((j) => j.name).toList();
+    final journals = _journals.map((j) => j.name).toList();
+    final contracts = _contracts.map((c) => c.name).toList();
+
     _grids.clear();
     _goalChains.clear();
     _moneyJars.clear();
     _journals.clear();
+    _contracts.clear();
     await _databaseService.saveHabitGrids(_grids);
     await _databaseService.saveGoalChains(_goalChains);
     await _databaseService.saveMoneyJars(_moneyJars);
     await _databaseService.saveJournals(_journals);
+    await _databaseService.saveContracts(_contracts);
+
+    for (final name in grids) {
+      await _databaseService.recordDeletion(DatabaseService.gridsFileName, name);
+    }
+    for (final name in chains) {
+      await _databaseService.recordDeletion(DatabaseService.chainsFileName, name);
+    }
+    for (final name in jars) {
+      await _databaseService.recordDeletion(DatabaseService.jarsFileName, name);
+    }
+    for (final name in journals) {
+      await _databaseService.recordDeletion(DatabaseService.journalsFileName, name);
+    }
+    for (final name in contracts) {
+      await _databaseService.recordDeletion(DatabaseService.contractsFileName, name);
+    }
     notifyListeners();
   }
 }

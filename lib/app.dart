@@ -22,7 +22,7 @@ class App extends StatelessWidget {
             debugShowCheckedModeBanner: false,
             themeMode: _getThemeMode(settings.themeMode),
             theme: _buildLightTheme(),
-            darkTheme: _buildDarkTheme(settings.themeMode),
+            darkTheme: _buildDarkTheme(),
             home: const HomeScreen(),
           );
         },
@@ -53,7 +53,7 @@ class App extends StatelessWidget {
     );
   }
 
-  ThemeData _buildDarkTheme(AppThemeMode mode) {
+  ThemeData _buildDarkTheme() {
     return ThemeData(
       colorScheme: ColorScheme.fromSeed(
         seedColor: AppColors.darkGreenPrimary,

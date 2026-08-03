@@ -6,6 +6,7 @@ import '../providers/habit_tracker_provider.dart';
 import '../widgets/habit_grid_widget.dart';
 import '../widgets/goal_chain_widget.dart';
 import '../widgets/money_jar_widget.dart';
+import '../widgets/habit_contract_widget.dart';
 import '../widgets/calendar_widget.dart';
 import '../utils/constants.dart';
 
@@ -28,6 +29,8 @@ class HomeBody extends StatelessWidget {
             return _buildChain(provider);
           case SelectedType.jar:
             return _buildJar(provider);
+          case SelectedType.contract:
+            return _buildContract(provider);
         }
       },
     );
@@ -127,6 +130,17 @@ class HomeBody extends StatelessWidget {
           provider.resetMoneyJar(selected!.index);
         },
       ),
+    );
+  }
+
+  Widget _buildContract(HabitTrackerProvider provider) {
+    if (selected!.index >= provider.contracts.length) {
+      return _buildEmpty('Select a contract from the menu');
+    }
+    final contract = provider.contracts[selected!.index];
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: HabitContractWidget(contract: contract),
     );
   }
 

@@ -8,6 +8,8 @@ class ImportExportService {
     'goal_chains.json',
     'money_jars.json',
     'habit_journals.json',
+    'habit_contracts.json',
+    'tombstones.json',
   ];
 
   Future<Map<String, dynamic>> exportAll() async {

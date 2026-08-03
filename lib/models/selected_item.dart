@@ -1,4 +1,4 @@
-enum SelectedType { journal, grid, chain, jar }
+enum SelectedType { journal, grid, chain, jar, contract }
 
 class SelectedItem {
   final SelectedType type;
