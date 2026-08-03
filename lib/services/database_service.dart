@@ -5,6 +5,7 @@ import '../models/goal_chain.dart';
 import '../models/money_jar.dart';
 import '../models/habit_journal.dart';
 import '../models/habit_contract.dart';
+import '../models/timed_habit.dart';
 import '../models/deletion_tombstone.dart';
 import '../utils/path_helper.dart';
 import 'sync_service.dart';
@@ -15,6 +16,7 @@ class DatabaseService {
   static const jarsFileName = 'money_jars.json';
   static const journalsFileName = 'habit_journals.json';
   static const contractsFileName = 'habit_contracts.json';
+  static const timedHabitsFileName = 'timed_habits.json';
   static const tombstonesFileName = 'tombstones.json';
 
   final SyncService _syncService = SyncService();
@@ -118,6 +120,25 @@ class DatabaseService {
       final content = await file.readAsString();
       final json = jsonDecode(content) as List<dynamic>;
       return json.map((e) => HabitContract.fromJson(e as Map<String, dynamic>)).toList();
+    } catch (e) {
+      return [];
+    }
+  }
+
+  Future<void> saveTimedHabits(List<TimedHabit> habits) async {
+    final file = await _getFile(timedHabitsFileName);
+    final json = habits.map((h) => h.toJson()).toList();
+    await file.writeAsString(jsonEncode(json));
+    _syncInBackground(timedHabitsFileName);
+  }
+
+  Future<List<TimedHabit>> loadTimedHabits() async {
+    try {
+      final file = await _getFile(timedHabitsFileName);
+      if (!await file.exists()) return [];
+      final content = await file.readAsString();
+      final json = jsonDecode(content) as List<dynamic>;
+      return json.map((e) => TimedHabit.fromJson(e as Map<String, dynamic>)).toList();
     } catch (e) {
       return [];
     }

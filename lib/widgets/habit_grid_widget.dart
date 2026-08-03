@@ -7,6 +7,7 @@ class HabitGridWidget extends StatelessWidget {
   final Function(int) onFillSquare;
   final VoidCallback? onIncrement;
   final VoidCallback? onReset;
+  final VoidCallback? onEdit;
 
   const HabitGridWidget({
     super.key,
@@ -14,6 +15,7 @@ class HabitGridWidget extends StatelessWidget {
     required this.onFillSquare,
     this.onIncrement,
     this.onReset,
+    this.onEdit,
   });
 
   @override
@@ -39,6 +41,14 @@ class HabitGridWidget extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (onEdit != null)
+                  IconButton(
+                    onPressed: onEdit,
+                    icon: const Icon(Icons.edit_outlined, size: 20),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    color: AppColors.textSecondary,
+                  ),
                 if (grid.isComplete)
                   const Icon(Icons.check_circle, color: AppColors.mintDark, size: 28),
               ],

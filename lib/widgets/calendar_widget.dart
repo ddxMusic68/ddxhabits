@@ -6,11 +6,13 @@ import '../utils/constants.dart';
 class CalendarWidget extends StatefulWidget {
   final HabitJournal journal;
   final int journalIndex;
+  final VoidCallback? onEdit;
 
   const CalendarWidget({
     super.key,
     required this.journal,
     required this.journalIndex,
+    this.onEdit,
   });
 
   @override
@@ -50,6 +52,14 @@ class _CalendarWidgetState extends State<CalendarWidget> {
               color: widget.journal.isGoodHabit ? AppColors.mintDark : AppColors.coralDark,
             ),
           ),
+          if (widget.onEdit != null)
+            IconButton(
+              onPressed: widget.onEdit,
+              icon: const Icon(Icons.edit_outlined, size: 20),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+            ),
           const SizedBox(height: 4),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,

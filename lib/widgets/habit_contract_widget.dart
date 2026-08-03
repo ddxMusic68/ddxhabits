@@ -4,10 +4,12 @@ import '../utils/constants.dart';
 
 class HabitContractWidget extends StatelessWidget {
   final HabitContract contract;
+  final VoidCallback? onEdit;
 
   const HabitContractWidget({
     super.key,
     required this.contract,
+    this.onEdit,
   });
 
   @override
@@ -35,6 +37,14 @@ class HabitContractWidget extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (onEdit != null)
+                  IconButton(
+                    onPressed: onEdit,
+                    icon: const Icon(Icons.edit_outlined, size: 20),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    color: AppColors.textSecondary,
+                  ),
               ],
             ),
             const SizedBox(height: 16),

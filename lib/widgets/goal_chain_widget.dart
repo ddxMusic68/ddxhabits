@@ -6,12 +6,14 @@ class GoalChainWidget extends StatelessWidget {
   final GoalChain chain;
   final VoidCallback? onComplete;
   final VoidCallback? onReset;
+  final VoidCallback? onEdit;
 
   const GoalChainWidget({
     super.key,
     required this.chain,
     this.onComplete,
     this.onReset,
+    this.onEdit,
   });
 
   @override
@@ -39,6 +41,14 @@ class GoalChainWidget extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (onEdit != null)
+                  IconButton(
+                    onPressed: onEdit,
+                    icon: const Icon(Icons.edit_outlined, size: 20),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    color: AppColors.textSecondary,
+                  ),
                 if (chain.isComplete)
                   const Icon(Icons.check_circle, color: AppColors.mintDark, size: 28),
               ],

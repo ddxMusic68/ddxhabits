@@ -3,10 +3,12 @@ import 'package:provider/provider.dart';
 import '../models/selected_item.dart';
 import '../models/habit_journal.dart';
 import '../providers/habit_tracker_provider.dart';
+import '../screens/create_dialogs.dart';
 import '../widgets/habit_grid_widget.dart';
 import '../widgets/goal_chain_widget.dart';
 import '../widgets/money_jar_widget.dart';
 import '../widgets/habit_contract_widget.dart';
+import '../widgets/timed_habit_widget.dart';
 import '../widgets/calendar_widget.dart';
 import '../utils/constants.dart';
 
@@ -24,13 +26,15 @@ class HomeBody extends StatelessWidget {
           case SelectedType.journal:
             return _buildJournal(context, provider);
           case SelectedType.grid:
-            return _buildGrid(provider);
+            return _buildGrid(context, provider);
           case SelectedType.chain:
-            return _buildChain(provider);
+            return _buildChain(context, provider);
           case SelectedType.jar:
-            return _buildJar(provider);
+            return _buildJar(context, provider);
           case SelectedType.contract:
-            return _buildContract(provider);
+            return _buildContract(context, provider);
+          case SelectedType.timed:
+            return _buildTimed(context, provider);
         }
       },
     );
@@ -54,6 +58,13 @@ class HomeBody extends StatelessWidget {
       key: ValueKey('${selected!.index}_${journal.journalEntryList.length}'),
       journal: journal,
       journalIndex: selected!.index,
+      onEdit: () => showAddJournalDialog(
+        context,
+        null,
+        isGoodHabit: journal.isGoodHabit,
+        initial: journal,
+        initialIndex: selected!.index,
+      ),
     );
 
     if (journal.isGoodHabit) {
@@ -70,7 +81,7 @@ class HomeBody extends StatelessWidget {
     );
   }
 
-  Widget _buildGrid(HabitTrackerProvider provider) {
+  Widget _buildGrid(BuildContext context, HabitTrackerProvider provider) {
     if (selected!.index >= provider.grids.length) {
       return _buildEmpty('Select a grid from the menu');
     }
@@ -88,11 +99,17 @@ class HomeBody extends StatelessWidget {
         onReset: () {
           provider.resetGrid(selected!.index);
         },
+        onEdit: () => showAddGridDialog(
+          context,
+          null,
+          initial: grid,
+          initialIndex: selected!.index,
+        ),
       ),
     );
   }
 
-  Widget _buildChain(HabitTrackerProvider provider) {
+  Widget _buildChain(BuildContext context, HabitTrackerProvider provider) {
     if (selected!.index >= provider.goalChains.length) {
       return _buildEmpty('Select a chain from the menu');
     }
@@ -107,11 +124,17 @@ class HomeBody extends StatelessWidget {
         onReset: () {
           provider.resetGoalChain(selected!.index);
         },
+        onEdit: () => showAddChainDialog(
+          context,
+          null,
+          initial: chain,
+          initialIndex: selected!.index,
+        ),
       ),
     );
   }
 
-  Widget _buildJar(HabitTrackerProvider provider) {
+  Widget _buildJar(BuildContext context, HabitTrackerProvider provider) {
     if (selected!.index >= provider.moneyJars.length) {
       return _buildEmpty('Select a jar from the menu');
     }
@@ -129,18 +152,60 @@ class HomeBody extends StatelessWidget {
         onReset: () {
           provider.resetMoneyJar(selected!.index);
         },
+        onEdit: () => showAddJarDialog(
+          context,
+          null,
+          initial: jar,
+          initialIndex: selected!.index,
+        ),
       ),
     );
   }
 
-  Widget _buildContract(HabitTrackerProvider provider) {
+  Widget _buildContract(BuildContext context, HabitTrackerProvider provider) {
     if (selected!.index >= provider.contracts.length) {
       return _buildEmpty('Select a contract from the menu');
     }
     final contract = provider.contracts[selected!.index];
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
-      child: HabitContractWidget(contract: contract),
+      child: HabitContractWidget(
+        contract: contract,
+        onEdit: () => showAddContractDialog(
+          context,
+          null,
+          initial: contract,
+          initialIndex: selected!.index,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTimed(BuildContext context, HabitTrackerProvider provider) {
+    if (selected!.index >= provider.timedHabits.length) {
+      return _buildEmpty('Select a timed habit from the menu');
+    }
+    final habit = provider.timedHabits[selected!.index];
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: TimedHabitWidget(
+        habit: habit,
+        onAddSession: (seconds) {
+          provider.addTimedSession(selected!.index, seconds);
+        },
+        onRemoveSession: (sessionIndex) {
+          provider.removeTimedSession(selected!.index, sessionIndex);
+        },
+        onReset: () {
+          provider.resetTimedHabit(selected!.index);
+        },
+        onEdit: () => showAddTimedHabitDialog(
+          context,
+          null,
+          initial: habit,
+          initialIndex: selected!.index,
+        ),
+      ),
     );
   }
 

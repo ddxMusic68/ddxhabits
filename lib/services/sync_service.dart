@@ -355,6 +355,7 @@ class SyncService {
     'money_jars.json',
     'habit_journals.json',
     'habit_contracts.json',
+    'timed_habits.json',
     'tombstones.json',
   ];
 

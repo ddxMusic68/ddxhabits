@@ -4,6 +4,8 @@ import '../models/goal_chain.dart';
 import '../models/money_jar.dart';
 import '../models/habit_journal.dart';
 import '../models/habit_contract.dart';
+import '../models/timed_habit.dart';
+import '../models/goal.dart';
 import '../models/journal_entry.dart';
 import '../models/journal_sub_entry.dart';
 import '../services/database_service.dart';
@@ -15,12 +17,14 @@ class HabitTrackerProvider extends ChangeNotifier {
   List<MoneyJar> _moneyJars = [];
   List<HabitJournal> _journals = [];
   List<HabitContract> _contracts = [];
+  List<TimedHabit> _timedHabits = [];
 
   List<HabitGrid> get grids => _grids;
   List<GoalChain> get goalChains => _goalChains;
   List<MoneyJar> get moneyJars => _moneyJars;
   List<HabitJournal> get journals => _journals;
   List<HabitContract> get contracts => _contracts;
+  List<TimedHabit> get timedHabits => _timedHabits;
 
   Future<void> loadAll() async {
     _grids = await _databaseService.loadHabitGrids();
@@ -28,6 +32,7 @@ class HabitTrackerProvider extends ChangeNotifier {
     _moneyJars = await _databaseService.loadMoneyJars();
     _journals = await _databaseService.loadJournals();
     _contracts = await _databaseService.loadContracts();
+    _timedHabits = await _databaseService.loadTimedHabits();
     notifyListeners();
   }
 
@@ -73,6 +78,46 @@ class HabitTrackerProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> updateGrid(
+    int index, {
+    required String name,
+    required double totalCount,
+    required double countIncrement,
+    required double squareCost,
+  }) async {
+    if (index < 0 || index >= _grids.length) return;
+    final grid = _grids[index];
+    final oldName = grid.name;
+
+    final newCount = totalCount.toInt().clamp(1, 10000);
+    if (grid.boolList.length != newCount) {
+      final newList = List<bool>.filled(newCount, false);
+      final copyLen = newCount < grid.boolList.length
+          ? newCount
+          : grid.boolList.length;
+      for (int i = 0; i < copyLen; i++) {
+        newList[i] = grid.boolList[i];
+      }
+      grid.boolList = newList;
+    }
+    grid.name = name;
+    grid.totalCount = totalCount;
+    grid.countIncrement = countIncrement;
+    grid.squareCost = squareCost;
+    grid.updatedAt = DateTime.now();
+    if (grid.filledCount >= grid.totalCount) {
+      grid.markComplete();
+    } else {
+      grid.isComplete = false;
+    }
+
+    await _databaseService.saveHabitGrids(_grids);
+    if (oldName != name) {
+      await _databaseService.recordDeletion(DatabaseService.gridsFileName, oldName);
+    }
+    notifyListeners();
+  }
+
   // --- Goal Chain CRUD ---
 
   Future<void> addGoalChain(GoalChain chain) async {
@@ -105,6 +150,41 @@ class HabitTrackerProvider extends ChangeNotifier {
       await _databaseService.saveGoalChains(_goalChains);
       notifyListeners();
     }
+  }
+
+  Future<void> updateGoalChain(
+    int index, {
+    required String name,
+    required List<Goal> goalList,
+  }) async {
+    if (index < 0 || index >= _goalChains.length) return;
+    final chain = _goalChains[index];
+    final oldName = chain.name;
+
+    final oldByTitle = <String, bool>{};
+    for (final goal in chain.goalList) {
+      oldByTitle[goal.title] = oldByTitle[goal.title] == true || goal.isComplete;
+    }
+    for (final goal in goalList) {
+      if (oldByTitle[goal.title] == true) {
+        goal.isComplete = true;
+      }
+    }
+
+    chain.name = name;
+    chain.goalList = goalList;
+    chain.updatedAt = DateTime.now();
+    if (goalList.isNotEmpty && goalList.every((g) => g.isComplete)) {
+      chain.markComplete();
+    } else {
+      chain.isComplete = false;
+    }
+
+    await _databaseService.saveGoalChains(_goalChains);
+    if (oldName != name) {
+      await _databaseService.recordDeletion(DatabaseService.chainsFileName, oldName);
+    }
+    notifyListeners();
   }
 
   // --- Money Jar CRUD ---
@@ -149,6 +229,34 @@ class HabitTrackerProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> updateMoneyJar(
+    int index, {
+    required String name,
+    required double increment,
+    required double goalAmount,
+    required bool useLiquidFill,
+  }) async {
+    if (index < 0 || index >= _moneyJars.length) return;
+    final jar = _moneyJars[index];
+    final oldName = jar.name;
+
+    jar.name = name;
+    jar.increment = increment;
+    jar.goalAmount = goalAmount;
+    jar.useLiquidFill = useLiquidFill;
+    if (jar.curAmount > goalAmount) {
+      jar.curAmount = goalAmount;
+    }
+    jar.updatedAt = DateTime.now();
+    jar.isComplete = jar.curAmount >= goalAmount;
+
+    await _databaseService.saveMoneyJars(_moneyJars);
+    if (oldName != name) {
+      await _databaseService.recordDeletion(DatabaseService.jarsFileName, oldName);
+    }
+    notifyListeners();
+  }
+
   // --- Journal CRUD ---
 
   Future<void> addJournal(String name, {bool isGoodHabit = true}) async {
@@ -181,6 +289,21 @@ class HabitTrackerProvider extends ChangeNotifier {
       await _databaseService.recordDeletion(DatabaseService.journalsFileName, removed);
       notifyListeners();
     }
+  }
+
+  Future<void> updateJournal(int index, String name) async {
+    if (index < 0 || index >= _journals.length) return;
+    final journal = _journals[index];
+    final oldName = journal.name;
+
+    journal.name = name;
+    journal.updatedAt = DateTime.now();
+
+    await _databaseService.saveJournals(_journals);
+    if (oldName != name) {
+      await _databaseService.recordDeletion(DatabaseService.journalsFileName, oldName);
+    }
+    notifyListeners();
   }
 
   JournalEntry? getJournalEntryForDate(int journalIndex, DateTime date) {
@@ -248,6 +371,90 @@ class HabitTrackerProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> updateContract(
+    int index, {
+    required String name,
+    required String time,
+    required String place,
+    required String consequence,
+  }) async {
+    if (index < 0 || index >= _contracts.length) return;
+    final contract = _contracts[index];
+    final oldName = contract.name;
+
+    contract.name = name;
+    contract.time = time;
+    contract.place = place;
+    contract.consequence = consequence;
+    contract.updatedAt = DateTime.now();
+
+    await _databaseService.saveContracts(_contracts);
+    if (oldName != name) {
+      await _databaseService.recordDeletion(DatabaseService.contractsFileName, oldName);
+    }
+    notifyListeners();
+  }
+
+  // --- Timed Habit CRUD ---
+
+  Future<void> addTimedHabit(TimedHabit habit) async {
+    _timedHabits.add(habit);
+    await _databaseService.saveTimedHabits(_timedHabits);
+    notifyListeners();
+  }
+
+  Future<void> removeTimedHabit(int index) async {
+    if (index >= 0 && index < _timedHabits.length) {
+      final removed = _timedHabits[index].name;
+      _timedHabits.removeAt(index);
+      await _databaseService.saveTimedHabits(_timedHabits);
+      await _databaseService.recordDeletion(DatabaseService.timedHabitsFileName, removed);
+      notifyListeners();
+    }
+  }
+
+  Future<void> updateTimedHabit(
+    int index, {
+    required String name,
+    required bool fasterIsBetter,
+  }) async {
+    if (index < 0 || index >= _timedHabits.length) return;
+    final habit = _timedHabits[index];
+    final oldName = habit.name;
+
+    habit.name = name;
+    habit.fasterIsBetter = fasterIsBetter;
+    habit.updatedAt = DateTime.now();
+
+    await _databaseService.saveTimedHabits(_timedHabits);
+    if (oldName != name) {
+      await _databaseService.recordDeletion(DatabaseService.timedHabitsFileName, oldName);
+    }
+    notifyListeners();
+  }
+
+  Future<void> addTimedSession(int index, int seconds) async {
+    if (index < 0 || index >= _timedHabits.length) return;
+    _timedHabits[index].addSession(seconds);
+    await _databaseService.saveTimedHabits(_timedHabits);
+    notifyListeners();
+  }
+
+  Future<void> removeTimedSession(int index, int sessionIndex) async {
+    if (index < 0 || index >= _timedHabits.length) return;
+    _timedHabits[index].removeSession(sessionIndex);
+    await _databaseService.saveTimedHabits(_timedHabits);
+    notifyListeners();
+  }
+
+  Future<void> resetTimedHabit(int index) async {
+    if (index >= 0 && index < _timedHabits.length) {
+      _timedHabits[index].reset();
+      await _databaseService.saveTimedHabits(_timedHabits);
+      notifyListeners();
+    }
+  }
+
   // --- All Data ---
 
   Future<void> clearAll() async {
@@ -256,17 +463,20 @@ class HabitTrackerProvider extends ChangeNotifier {
     final jars = _moneyJars.map((j) => j.name).toList();
     final journals = _journals.map((j) => j.name).toList();
     final contracts = _contracts.map((c) => c.name).toList();
+    final timedHabits = _timedHabits.map((t) => t.name).toList();
 
     _grids.clear();
     _goalChains.clear();
     _moneyJars.clear();
     _journals.clear();
     _contracts.clear();
+    _timedHabits.clear();
     await _databaseService.saveHabitGrids(_grids);
     await _databaseService.saveGoalChains(_goalChains);
     await _databaseService.saveMoneyJars(_moneyJars);
     await _databaseService.saveJournals(_journals);
     await _databaseService.saveContracts(_contracts);
+    await _databaseService.saveTimedHabits(_timedHabits);
 
     for (final name in grids) {
       await _databaseService.recordDeletion(DatabaseService.gridsFileName, name);
@@ -282,6 +492,9 @@ class HabitTrackerProvider extends ChangeNotifier {
     }
     for (final name in contracts) {
       await _databaseService.recordDeletion(DatabaseService.contractsFileName, name);
+    }
+    for (final name in timedHabits) {
+      await _databaseService.recordDeletion(DatabaseService.timedHabitsFileName, name);
     }
     notifyListeners();
   }

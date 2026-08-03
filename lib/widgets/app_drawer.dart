@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/selected_item.dart';
 import '../models/habit_journal.dart';
 import '../providers/habit_tracker_provider.dart';
+import '../screens/create_dialogs.dart';
 import '../utils/constants.dart';
 
 class AppDrawer extends StatelessWidget {
@@ -121,6 +122,20 @@ class AppDrawer extends StatelessWidget {
                   ),
                   ..._buildContractItems(context, provider),
                 ],
+                if (provider.timedHabits.isNotEmpty) ...[
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(16, 16, 16, 4),
+                    child: Text(
+                      'HABIT TIMERS',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ),
+                  ..._buildTimedItems(context, provider),
+                ],
               ],
             ),
           ),
@@ -163,7 +178,7 @@ class AppDrawer extends StatelessWidget {
         ),
         selected: isSelected,
         selectedTileColor: AppColors.mintLight,
-        trailing: _deleteButton(context, provider, SelectedType.grid, originalIndex),
+        trailing: _trailingButtons(context, provider, SelectedType.grid, originalIndex),
         onTap: () {
           onSelect(SelectedItem(SelectedType.grid, originalIndex));
           Navigator.pop(context);
@@ -209,7 +224,7 @@ class AppDrawer extends StatelessWidget {
         ),
         selected: isSelected,
         selectedTileColor: AppColors.mintLight,
-        trailing: _deleteButton(context, provider, SelectedType.chain, originalIndex),
+        trailing: _trailingButtons(context, provider, SelectedType.chain, originalIndex),
         onTap: () {
           onSelect(SelectedItem(SelectedType.chain, originalIndex));
           Navigator.pop(context);
@@ -255,7 +270,7 @@ class AppDrawer extends StatelessWidget {
         ),
         selected: isSelected,
         selectedTileColor: AppColors.mintLight,
-        trailing: _deleteButton(context, provider, SelectedType.jar, originalIndex),
+        trailing: _trailingButtons(context, provider, SelectedType.jar, originalIndex),
         onTap: () {
           onSelect(SelectedItem(SelectedType.jar, originalIndex));
           Navigator.pop(context);
@@ -283,7 +298,7 @@ class AppDrawer extends StatelessWidget {
         ),
         selected: isSelected,
         selectedTileColor: AppColors.mintLight,
-        trailing: _deleteButton(context, provider, SelectedType.contract, index),
+        trailing: _trailingButtons(context, provider, SelectedType.contract, index),
         onTap: () {
           onSelect(SelectedItem(SelectedType.contract, index));
           Navigator.pop(context);
@@ -327,7 +342,7 @@ class AppDrawer extends StatelessWidget {
         ),
         selected: isSelected,
         selectedTileColor: bgColor,
-        trailing: _deleteButton(context, provider, SelectedType.journal, index),
+        trailing: _trailingButtons(context, provider, SelectedType.journal, index),
         onTap: () {
           onSelect(SelectedItem(SelectedType.journal, index));
           Navigator.pop(context);
@@ -336,17 +351,91 @@ class AppDrawer extends StatelessWidget {
     }).toList();
   }
 
-  Widget _deleteButton(
+  List<Widget> _buildTimedItems(
+    BuildContext context,
+    HabitTrackerProvider provider,
+  ) {
+    return List.generate(provider.timedHabits.length, (index) {
+      final habit = provider.timedHabits[index];
+      final isSelected =
+          selected?.type == SelectedType.timed && selected?.index == index;
+      return ListTile(
+        leading: const Icon(Icons.timer_outlined, size: 20),
+        title: Text(
+          habit.name,
+          style: TextStyle(
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            color: isSelected ? AppColors.mintDark : null,
+          ),
+        ),
+        selected: isSelected,
+        selectedTileColor: AppColors.mintLight,
+        trailing: _trailingButtons(context, provider, SelectedType.timed, index),
+        onTap: () {
+          onSelect(SelectedItem(SelectedType.timed, index));
+          Navigator.pop(context);
+        },
+      );
+    });
+  }
+
+  Widget _trailingButtons(
     BuildContext context,
     HabitTrackerProvider provider,
     SelectedType type,
     int index,
   ) {
-    return IconButton(
-      icon: const Icon(Icons.delete_outline, size: 20),
-      tooltip: 'Delete',
-      onPressed: () => _confirmDelete(context, provider, type, index),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          icon: const Icon(Icons.edit_outlined, size: 20),
+          tooltip: 'Edit',
+          onPressed: () => _editItem(context, provider, type, index),
+        ),
+        IconButton(
+          icon: const Icon(Icons.delete_outline, size: 20),
+          tooltip: 'Delete',
+          onPressed: () => _confirmDelete(context, provider, type, index),
+        ),
+      ],
     );
+  }
+
+  void _editItem(
+    BuildContext context,
+    HabitTrackerProvider provider,
+    SelectedType type,
+    int index,
+  ) {
+    switch (type) {
+      case SelectedType.grid:
+        showAddGridDialog(context, null,
+            initial: provider.grids[index], initialIndex: index);
+        break;
+      case SelectedType.chain:
+        showAddChainDialog(context, null,
+            initial: provider.goalChains[index], initialIndex: index);
+        break;
+      case SelectedType.jar:
+        showAddJarDialog(context, null,
+            initial: provider.moneyJars[index], initialIndex: index);
+        break;
+      case SelectedType.journal:
+        showAddJournalDialog(context, null,
+            isGoodHabit: provider.journals[index].isGoodHabit,
+            initial: provider.journals[index],
+            initialIndex: index);
+        break;
+      case SelectedType.contract:
+        showAddContractDialog(context, null,
+            initial: provider.contracts[index], initialIndex: index);
+        break;
+      case SelectedType.timed:
+        showAddTimedHabitDialog(context, null,
+            initial: provider.timedHabits[index], initialIndex: index);
+        break;
+    }
   }
 
   Future<void> _confirmDelete(
@@ -391,6 +480,9 @@ class AppDrawer extends StatelessWidget {
       case SelectedType.contract:
         await provider.removeContract(index);
         break;
+      case SelectedType.timed:
+        await provider.removeTimedHabit(index);
+        break;
     }
     onDelete?.call(SelectedItem(type, index));
   }
@@ -411,6 +503,8 @@ class AppDrawer extends StatelessWidget {
         return provider.journals[index].name;
       case SelectedType.contract:
         return provider.contracts[index].name;
+      case SelectedType.timed:
+        return provider.timedHabits[index].name;
     }
   }
 }

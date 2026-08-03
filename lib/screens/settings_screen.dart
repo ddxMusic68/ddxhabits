@@ -7,6 +7,7 @@ import '../providers/settings_provider.dart';
 import '../providers/habit_tracker_provider.dart';
 import '../services/import_export_service.dart';
 import '../services/sync_service.dart';
+import '../screens/about_screen.dart';
 import '../screens/dropbox_setup_screen.dart';
 import '../utils/constants.dart';
 
@@ -99,6 +100,19 @@ class SettingsScreen extends StatelessWidget {
                   subtitle: const Text('Delete all data from Dropbox'),
                   onTap: () => _confirmClearCloud(context, settings),
                 ),
+              const Divider(),
+              const _SectionHeader(title: 'Info'),
+              ListTile(
+                leading: const Icon(Icons.info_outline, color: AppColors.mintDark),
+                title: const Text('Learn more about this app'),
+                trailing: const Icon(Icons.chevron_right, size: 18),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const AboutScreen()),
+                  );
+                },
+              ),
               const Divider(),
               const _VersionTile(),
             ],

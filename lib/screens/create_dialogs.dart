@@ -6,6 +6,8 @@ import '../models/goal_chain.dart';
 import '../models/goal.dart';
 import '../models/money_jar.dart';
 import '../models/habit_contract.dart';
+import '../models/habit_journal.dart';
+import '../models/timed_habit.dart';
 import '../providers/habit_tracker_provider.dart';
 import '../utils/constants.dart';
 
@@ -92,6 +94,15 @@ void showCreateChoiceDialog(
                 showAddContractDialog(context, onCreated);
               },
             ),
+            ListTile(
+              leading: const Icon(Icons.timer_outlined, color: AppColors.mintDark),
+              title: const Text('Timed Habit'),
+              subtitle: const Text('Time yourself and beat your best'),
+              onTap: () {
+                Navigator.pop(context);
+                showAddTimedHabitDialog(context, onCreated);
+              },
+            ),
           ],
         ),
       ),
@@ -101,17 +112,26 @@ void showCreateChoiceDialog(
 
 void showAddGridDialog(
   BuildContext context,
-  ValueChanged<SelectedItem> onCreated,
-) {
-  final nameController = TextEditingController();
-  final countController = TextEditingController(text: '10');
-  final costController = TextEditingController(text: '1.00');
-  final incrementController = TextEditingController(text: '1.00');
+  ValueChanged<SelectedItem>? onCreated, {
+  HabitGrid? initial,
+  int initialIndex = -1,
+}) {
+  final isEdit = initial != null;
+  final nameController = TextEditingController(text: initial?.name ?? '');
+  final countController = TextEditingController(
+    text: initial != null ? initial.totalCount.toInt().toString() : '10',
+  );
+  final costController = TextEditingController(
+    text: initial != null ? initial.squareCost.toStringAsFixed(2) : '1.00',
+  );
+  final incrementController = TextEditingController(
+    text: initial != null ? initial.countIncrement.toStringAsFixed(2) : '1.00',
+  );
 
   showDialog(
     context: context,
     builder: (context) => AlertDialog(
-      title: const Text('New Habit Grid'),
+      title: Text(isEdit ? 'Edit Habit Grid' : 'New Habit Grid'),
       content: ConstrainedBox(
         constraints: BoxConstraints(
           maxHeight: MediaQuery.of(context).size.height * 0.6,
@@ -159,20 +179,30 @@ void showAddGridDialog(
 
             if (name.isNotEmpty) {
               final provider = context.read<HabitTrackerProvider>();
-              final grid = HabitGrid(
-                name: name,
-                totalCount: count.toDouble(),
-                squareCost: cost,
-                countIncrement: increment,
-              );
-              provider.addGrid(grid);
-              onCreated(
-                SelectedItem(SelectedType.grid, provider.grids.length - 1),
-              );
+              if (isEdit) {
+                provider.updateGrid(
+                  initialIndex,
+                  name: name,
+                  totalCount: count.toDouble(),
+                  squareCost: cost,
+                  countIncrement: increment,
+                );
+              } else {
+                final grid = HabitGrid(
+                  name: name,
+                  totalCount: count.toDouble(),
+                  squareCost: cost,
+                  countIncrement: increment,
+                );
+                provider.addGrid(grid);
+                onCreated?.call(
+                  SelectedItem(SelectedType.grid, provider.grids.length - 1),
+                );
+              }
               Navigator.pop(context);
             }
           },
-          child: const Text('Create'),
+          child: Text(isEdit ? 'Save' : 'Create'),
         ),
       ],
     ),
@@ -181,16 +211,22 @@ void showAddGridDialog(
 
 void showAddChainDialog(
   BuildContext context,
-  ValueChanged<SelectedItem> onCreated,
-) {
-  final nameController = TextEditingController();
-  final goalControllers = <TextEditingController>[];
+  ValueChanged<SelectedItem>? onCreated, {
+  GoalChain? initial,
+  int initialIndex = -1,
+}) {
+  final isEdit = initial != null;
+  final nameController = TextEditingController(text: initial?.name ?? '');
+  final goalControllers = <TextEditingController>[
+    if (initial != null)
+      ...initial.goalList.map((g) => TextEditingController(text: g.title)),
+  ];
 
   showDialog(
     context: context,
     builder: (context) => StatefulBuilder(
       builder: (context, setDialogState) => AlertDialog(
-        title: const Text('New Goal Chain'),
+        title: Text(isEdit ? 'Edit Goal Chain' : 'New Goal Chain'),
         content: ConstrainedBox(
           constraints: BoxConstraints(
             maxHeight: MediaQuery.of(context).size.height * 0.6,
@@ -219,9 +255,12 @@ void showAddChainDialog(
                       child: Row(
                         children: [
                           Expanded(
-                            child: Text(
-                              '${index + 1}. ${goalControllers[index].text}',
-                              style: const TextStyle(fontSize: 14),
+                            child: TextField(
+                              controller: goalControllers[index],
+                              decoration: InputDecoration(
+                                hintText: 'Goal ${index + 1}',
+                                isDense: true,
+                              ),
                             ),
                           ),
                           IconButton(
@@ -260,22 +299,28 @@ void showAddChainDialog(
               if (name.isEmpty || goalControllers.isEmpty) return;
 
               final provider = context.read<HabitTrackerProvider>();
-              final chain = GoalChain(
-                name: name,
-                goalList: goalControllers
-                    .map((c) => Goal(title: c.text))
-                    .toList(),
-              );
-              provider.addGoalChain(chain);
-              onCreated(
-                SelectedItem(
-                  SelectedType.chain,
-                  provider.goalChains.length - 1,
-                ),
-              );
+              final goalList = goalControllers
+                  .map((c) => Goal(title: c.text.trim()))
+                  .where((g) => g.title.isNotEmpty)
+                  .toList();
+              if (goalList.isEmpty) return;
+
+              if (isEdit) {
+                provider.updateGoalChain(initialIndex,
+                    name: name, goalList: goalList);
+              } else {
+                final chain = GoalChain(name: name, goalList: goalList);
+                provider.addGoalChain(chain);
+                onCreated?.call(
+                  SelectedItem(
+                    SelectedType.chain,
+                    provider.goalChains.length - 1,
+                  ),
+                );
+              }
               Navigator.pop(context);
             },
-            child: const Text('Create'),
+            child: Text(isEdit ? 'Save' : 'Create'),
           ),
         ],
       ),
@@ -285,18 +330,29 @@ void showAddChainDialog(
 
 void showAddJarDialog(
   BuildContext context,
-  ValueChanged<SelectedItem> onCreated,
-) {
-  final nameController = TextEditingController();
-  final incrementController = TextEditingController(text: '1.00');
-  final goalController = TextEditingController(text: '10.00');
-  bool useLiquid = true;
+  ValueChanged<SelectedItem>? onCreated, {
+  MoneyJar? initial,
+  int initialIndex = -1,
+}) {
+  final isEdit = initial != null;
+  final nameController = TextEditingController(text: initial?.name ?? '');
+  final incrementController = TextEditingController(
+    text: initial != null
+        ? initial.increment.toStringAsFixed(2)
+        : '1.00',
+  );
+  final goalController = TextEditingController(
+    text: initial != null
+        ? initial.goalAmount.toStringAsFixed(2)
+        : '10.00',
+  );
+  bool useLiquid = initial?.useLiquidFill ?? true;
 
   showDialog(
     context: context,
     builder: (context) => StatefulBuilder(
       builder: (context, setDialogState) => AlertDialog(
-        title: const Text('New Money Jar'),
+        title: Text(isEdit ? 'Edit Money Jar' : 'New Money Jar'),
         content: ConstrainedBox(
           constraints: BoxConstraints(
             maxHeight: MediaQuery.of(context).size.height * 0.6,
@@ -350,20 +406,30 @@ void showAddJarDialog(
 
               if (name.isNotEmpty) {
                 final provider = context.read<HabitTrackerProvider>();
-                final jar = MoneyJar(
-                  name: name,
-                  increment: increment,
-                  goalAmount: goal,
-                  useLiquidFill: useLiquid,
-                );
-                provider.addMoneyJar(jar);
-                onCreated(
-                  SelectedItem(SelectedType.jar, provider.moneyJars.length - 1),
-                );
+                if (isEdit) {
+                  provider.updateMoneyJar(
+                    initialIndex,
+                    name: name,
+                    increment: increment,
+                    goalAmount: goal,
+                    useLiquidFill: useLiquid,
+                  );
+                } else {
+                  final jar = MoneyJar(
+                    name: name,
+                    increment: increment,
+                    goalAmount: goal,
+                    useLiquidFill: useLiquid,
+                  );
+                  provider.addMoneyJar(jar);
+                  onCreated?.call(
+                    SelectedItem(SelectedType.jar, provider.moneyJars.length - 1),
+                  );
+                }
                 Navigator.pop(context);
               }
             },
-            child: const Text('Create'),
+            child: Text(isEdit ? 'Save' : 'Create'),
           ),
         ],
       ),
@@ -373,17 +439,22 @@ void showAddJarDialog(
 
 void showAddContractDialog(
   BuildContext context,
-  ValueChanged<SelectedItem> onCreated,
-) {
-  final nameController = TextEditingController();
-  final timeController = TextEditingController();
-  final placeController = TextEditingController();
-  final consequenceController = TextEditingController();
+  ValueChanged<SelectedItem>? onCreated, {
+  HabitContract? initial,
+  int initialIndex = -1,
+}) {
+  final isEdit = initial != null;
+  final nameController = TextEditingController(text: initial?.name ?? '');
+  final timeController = TextEditingController(text: initial?.time ?? '');
+  final placeController = TextEditingController(text: initial?.place ?? '');
+  final consequenceController = TextEditingController(
+    text: initial?.consequence ?? '',
+  );
 
   showDialog(
     context: context,
     builder: (context) => AlertDialog(
-      title: const Text('New Habit Contract'),
+      title: Text(isEdit ? 'Edit Habit Contract' : 'New Habit Contract'),
       content: ConstrainedBox(
         constraints: BoxConstraints(
           maxHeight: MediaQuery.of(context).size.height * 0.6,
@@ -431,23 +502,33 @@ void showAddContractDialog(
             final name = nameController.text;
             if (name.isNotEmpty) {
               final provider = context.read<HabitTrackerProvider>();
-              final contract = HabitContract(
-                name: name,
-                time: timeController.text.trim(),
-                place: placeController.text.trim(),
-                consequence: consequenceController.text.trim(),
-              );
-              provider.addContract(contract);
-              onCreated(
-                SelectedItem(
-                  SelectedType.contract,
-                  provider.contracts.length - 1,
-                ),
-              );
+              if (isEdit) {
+                provider.updateContract(
+                  initialIndex,
+                  name: name,
+                  time: timeController.text.trim(),
+                  place: placeController.text.trim(),
+                  consequence: consequenceController.text.trim(),
+                );
+              } else {
+                final contract = HabitContract(
+                  name: name,
+                  time: timeController.text.trim(),
+                  place: placeController.text.trim(),
+                  consequence: consequenceController.text.trim(),
+                );
+                provider.addContract(contract);
+                onCreated?.call(
+                  SelectedItem(
+                    SelectedType.contract,
+                    provider.contracts.length - 1,
+                  ),
+                );
+              }
               Navigator.pop(context);
             }
           },
-          child: const Text('Create'),
+          child: Text(isEdit ? 'Save' : 'Create'),
         ),
       ],
     ),
@@ -456,17 +537,20 @@ void showAddContractDialog(
 
 void showAddJournalDialog(
   BuildContext context,
-  ValueChanged<SelectedItem> onCreated, {
+  ValueChanged<SelectedItem>? onCreated, {
   required bool isGoodHabit,
+  HabitJournal? initial,
+  int initialIndex = -1,
 }) {
-  final nameController = TextEditingController();
+  final isEdit = initial != null;
+  final nameController = TextEditingController(text: initial?.name ?? '');
   final label = isGoodHabit ? 'Good Habit' : 'Bad Habit';
   final accentColor = isGoodHabit ? AppColors.mintDark : AppColors.coralDark;
 
   showDialog(
     context: context,
     builder: (context) => AlertDialog(
-      title: Text('New $label Journal'),
+      title: Text(isEdit ? 'Edit $label Journal' : 'New $label Journal'),
       content: ConstrainedBox(
         constraints: BoxConstraints(
           maxHeight: MediaQuery.of(context).size.height * 0.6,
@@ -494,19 +578,129 @@ void showAddJournalDialog(
 
             if (name.isNotEmpty) {
               final provider = context.read<HabitTrackerProvider>();
-              provider.addJournal(name, isGoodHabit: isGoodHabit);
-              onCreated(
-                SelectedItem(
-                  SelectedType.journal,
-                  provider.journals.length - 1,
-                ),
-              );
+              if (isEdit) {
+                provider.updateJournal(initialIndex, name);
+              } else {
+                provider.addJournal(name, isGoodHabit: isGoodHabit);
+                onCreated?.call(
+                  SelectedItem(
+                    SelectedType.journal,
+                    provider.journals.length - 1,
+                  ),
+                );
+              }
               Navigator.pop(context);
             }
           },
-          child: Text('Create', style: TextStyle(color: accentColor)),
+          child: Text(isEdit ? 'Save' : 'Create',
+              style: TextStyle(color: accentColor)),
         ),
       ],
+    ),
+  );
+}
+
+void showAddTimedHabitDialog(
+  BuildContext context,
+  ValueChanged<SelectedItem>? onCreated, {
+  TimedHabit? initial,
+  int initialIndex = -1,
+}) {
+  final isEdit = initial != null;
+  final nameController = TextEditingController(text: initial?.name ?? '');
+  bool fasterIsBetter = initial?.fasterIsBetter ?? true;
+
+  showDialog(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setDialogState) => AlertDialog(
+        title: Text(isEdit ? 'Edit Timed Habit' : 'New Timed Habit'),
+        content: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.6,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(labelText: 'Habit'),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Improvement means:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                RadioGroup<bool>(
+                  groupValue: fasterIsBetter,
+                  onChanged: (val) =>
+                      setDialogState(() => fasterIsBetter = val ?? true),
+                  child: const Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      RadioListTile<bool>(
+                        title: Text('Getting quicker'),
+                        subtitle: Text(
+                          'e.g. running a distance — a shorter time is better',
+                        ),
+                        value: true,
+                        activeColor: AppColors.mintDark,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                      RadioListTile<bool>(
+                        title: Text('Going longer'),
+                        subtitle: Text(
+                          'e.g. a core exercise — a longer time is better',
+                        ),
+                        value: false,
+                        activeColor: AppColors.mintDark,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              final name = nameController.text;
+              if (name.isNotEmpty) {
+                final provider = context.read<HabitTrackerProvider>();
+                if (isEdit) {
+                  provider.updateTimedHabit(
+                    initialIndex,
+                    name: name,
+                    fasterIsBetter: fasterIsBetter,
+                  );
+                } else {
+                  final habit = TimedHabit(
+                    name: name,
+                    fasterIsBetter: fasterIsBetter,
+                  );
+                  provider.addTimedHabit(habit);
+                  onCreated?.call(
+                    SelectedItem(
+                      SelectedType.timed,
+                      provider.timedHabits.length - 1,
+                    ),
+                  );
+                }
+                Navigator.pop(context);
+              }
+            },
+            child: Text(isEdit ? 'Save' : 'Create'),
+          ),
+        ],
+      ),
     ),
   );
 }

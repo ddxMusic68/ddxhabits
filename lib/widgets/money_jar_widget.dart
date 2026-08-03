@@ -7,6 +7,7 @@ class MoneyJarWidget extends StatelessWidget {
   final VoidCallback? onAdd;
   final VoidCallback? onRemove;
   final VoidCallback? onReset;
+  final VoidCallback? onEdit;
 
   const MoneyJarWidget({
     super.key,
@@ -14,6 +15,7 @@ class MoneyJarWidget extends StatelessWidget {
     this.onAdd,
     this.onRemove,
     this.onReset,
+    this.onEdit,
   });
 
   @override
@@ -39,6 +41,14 @@ class MoneyJarWidget extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (onEdit != null)
+                  IconButton(
+                    onPressed: onEdit,
+                    icon: const Icon(Icons.edit_outlined, size: 20),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    color: AppColors.textSecondary,
+                  ),
                 if (jar.isComplete)
                   const Icon(Icons.check_circle, color: AppColors.mintDark, size: 28),
               ],
