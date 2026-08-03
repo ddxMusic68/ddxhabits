@@ -68,7 +68,9 @@ lib/
 ```
 
 # Todo
-nothing for now
+- get export working on android
+- get sync working: Failed to connect: DioException [connection error]: The connection errored: Failed host lookup: 'api.dropbox.com' This indicates an error which most likely cannot be solved by the library.
+Error: SocketException: Failed host lookup: 'api.dropbox.com' (OS Error: No address associated with hostname, errno = 7)
 
 ## Changelog
 ### 1.1.0
